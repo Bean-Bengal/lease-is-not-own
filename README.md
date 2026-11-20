@@ -1,6 +1,6 @@
 # LEASE IS NOT OWN
 
-Added a row of noise cards under the puzzle that flip with mouse, Enter or Space and tab focus, plus load-time tests that a press flips once.
+Noise card test now builds a real card and a broken copy that ignores held-key repeat, and checks the broken one fails.
 
 Made by Bean, a cat. Open it: https://bean-bengal.github.io/lease-is-not-own/
 

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LEASE IS NOT OWN</title>
+<style>
+body{margin:0;background:#2a2622;color:#f2e8d5;font-family:monospace;text-align:center}
+h1{font-size:18px;margin:8px}
+canvas{width:100%;max-width:560px;display:block;margin:0 auto;background:#3b342d;touch-action:none}
+#msg{min-height:20px;font-size:14px;margin:4px}
+.b{display:inline-block;margin:3px;padding:10px 14px;background:#5a4d40;color:#f2e8d5;border:0;border-radius:6px;font:inherit}
+.b.on{background:#b0332a}
+#t{max-width:560px;margin:0 auto}
+</style></head><body>
+<script data-bean-store>(function(){if(typeof location!=='undefined'&&location&&location.protocol==='about:'&&typeof document!=='undefined'&&document.addEventListener){document.addEventListener('click',function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#"]');if(!a||a.target==='_blank')return;e.preventDefault();try{location.hash=a.getAttribute('href')}catch(x){}},true)}if(typeof window==='undefined')return;try{window.localStorage.getItem('x');return}catch(e){}var d=Object.assign({},window.__BEAN_SAVED||{});function post(){try{parent.postMessage({type:'bean-store',data:d},'*')}catch(e){}}var ls={getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[k]=String(v);post()},removeItem:function(k){delete d[k];post()},clear:function(){d={};post()},key:function(i){return Object.keys(d)[i]||null}};Object.defineProperty(ls,'length',{get:function(){return Object.keys(d).length}});try{Object.defineProperty(window,'localStorage',{value:ls,configurable:true})}catch(e){}})();</script>
+<h1>LEASE IS NOT OWN</h1>
+<div id="msg"></div>
+<canvas id="c"></canvas>
+<div id="t">
+<button class="b" id="bu">Undo</button><button class="b" id="bt">Tail: off</button><button class="b" id="br">Reset</button><br>
+<button class="b" data-d="0,-1">&#9650;</button><br>
+<button class="b" data-d="-1,0">&#9664;</button><button class="b" data-d="0,1">&#9660;</button><button class="b" data-d="1,0">&#9654;</button>
+<p style="font-size:12px">Arrows move. T = tail (pulls blocks behind you). Z undo. R reset.</p>
+</div>
+<div id="test" style="font-size:12px"></div>
+<script>
+var W=11,H=8,S=48;
+var NOUNS=['BEAN','LAND','LEASE'],PROPS=['YOU','OWN'];
+function wd(w,x,y,f){return {k:'word',w:w,x:x,y:y,f:!!f}}
+function level(){return [
+ wd('LEASE',3,0,1),wd('IS',4,0,1),wd('NOT',5,0,1),wd('OWN',6,0,1),
+ wd('BEAN',1,7,1),wd('IS',2,7,1),wd('YOU',3,7,1),
+ wd('LAND',2,2),wd('IS',3,2),wd('LEASE',4,2),
+ wd('OWN',8,2),wd('IS',7,4),wd('NOT',6,6),
+ {k:'wall',x:5,y:5},{k:'wall',x:5,y:6},{k:'wall',x:9,y:5},{k:'wall',x:10,y:5},
+ {k:'land',x:9,y:6},{k:'bean',x:4,y:1}
+]}
+// pure: rules from list of words
+function parseRules(ws){
+ var g={};ws.forEach(function(e){g[e.x+','+e.y]=e.w});
+ var rules=[],used=[];
+ ws.forEach(function(e){
+  if(e.w!=='IS')return;
+  [[1,0],[0,1]].forEach(function(d){
+   var a=g[(e.x-d[0])+','+(e.y-d[1])];
+   var b=g[(e.x+d[0])+','+(e.y+d[1])],neg=false,n=1;
+   if(b==='NOT'){neg=true;n=2;b=g[(e.x+n*d[0])+','+(e.y+n*d[1])];}
+   if(a&&b&&NOUNS.indexOf(a)>=0&&(NOUNS.indexOf(b)>=0||PROPS.indexOf(b)>=0)&&b!==a&&a!=='IS'){
+    rules.push({a:a,b:b,neg:neg});
+    for(var i=-1;i<=n+1-(neg?0:0);i++)used.push((e.x+i*d[0])+','+(e.y+i*d[1]));
+   }
+  });
+ });
+ return {rules:rules,used:used};
+}
+// pure: does noun have prop
+function has(rules,noun,prop){
+ var set=[noun],ch=true;
+ while(ch){ch=false;rules.forEach(function(r){
+  if(!r.neg&&NOUNS.indexOf(r.b)>=0&&set.indexOf(r.a)>=0&&set.indexOf(r.b)<0){set.push(r.b);ch=true}})}
+ var pos=false,neg=false;
+ rules.forEach(function(r){if(r.b===prop&&set.indexOf(r.a)>=0){if(r.neg)neg=true;else pos=true}});
+ return pos&&!neg;
+}
+var ents,hist=[],tail=false,won=false;
+function words(){return ents.filter(function(e){return e.k==='word'})}
+function at(x,y,k){return ents.filter(function(e){return e.x===x&&e.y===y&&(!k||e.k===k)})}
+function wordAt(x,y){return at(x,y,'word')[0]}
+function blocked(x,y){return x<0||y<0||x>=W||y>=H||at(x,y,'wall').length>0}
+function snap(){hist.push(JSON.stringify(ents));if(hist.length>300)hist.shift()}
+function move(dx,dy){
+ if(won)return;
+ var rules=parseRules(words()).rules;
+ var bean=ents.filter(function(e){return e.k==='bean'})[0];
+ if(!has(rules,'BEAN','YOU'))return msg('BEAN is not YOU. Undo.');
+ var list=[],x=bean.x+dx,y=bean.y+dy;
+ if(blocked(x,y))return;
+ while(wordAt(x,y)){var w=wordAt(x,y);if(w.f)return;list.push(w);x+=dx;y+=dy;if(blocked(x,y))return}
+ var back=[];
+ if(tail){var q=bean.x-dx,r=bean.y-dy;
+  while(wordAt(q,r)&&!wordAt(q,r).f){back.push(wordAt(q,r));q-=dx;r-=dy}}
+ snap();
+ list.forEach(function(w){w.x+=dx;w.y+=dy});
+ bean.x+=dx;bean.y+=dy;
+ back.forEach(function(w){w.x+=dx;w.y+=dy});
+ check();
+}
+function check(){
+ var rules=parseRules(words()).rules;
+ var bean=ents.filter(function(e){return e.k==='bean'})[0];
+ var land=ents.filter(function(e){return e.k==='land'})[0];
+ var own=has(rules,'LAND','OWN');
+ if(own&&bean.x===land.x&&bean.y===land.y){won=true;msg('You own the land. Deed signed in pawprint.');}
+ else msg(own?'The land is OWN. Walk onto it.':'');
+ draw();
+}
+function msg(s){document.getElementById('msg').textContent=s}
+function reset(){ents=level();hist=[];won=false;msg('');check()}
+function undo(){if(hist.length){ents=JSON.parse(hist.pop());won=false;check()}}
+var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var dpr=window.devicePixelRatio||1;cv.width=W*S*dpr;cv.height=H*S*dpr;
+function rr(x,y,w,h,r,fill){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();ctx.fillStyle=fill;ctx.fill()}
+function draw(){
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+ ctx.fillStyle='#3b342d';ctx.fillRect(0,0,W*S,H*S);
+ for(var i=0;i<W;i++)for(var j=0;j<H;j++){if((i+j)%2)continue;ctx.fillStyle='#40382f';ctx.fillRect(i*S,j*S,S,S)}
+ var pr=parseRules(words()),used=pr.used;
+ var own=has(pr.rules,'LAND','OWN');
+ ents.forEach(function(e){
+  var X=e.x*S,Y=e.y*S;
+  if(e.k==='land'){rr(X+3,Y+3,S-6,S-6,8,own?'#d9b24a':'#6a9a4a');ctx.fillStyle='#2a2622';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText(own?'OWN':'LEASED',X+S/2,Y+S/2+4)}
+ });
+ ents.forEach(function(e){
+  var X=e.x*S,Y=e.y*S;
+  if(e.k==='wall'){rr(X+2,Y+2,S-4,S-4,4,'#6b4f3a')}
+  if(e.k==='word'){
+   var c=NOUNS.indexOf(e.w)>=0?'#d9728f':PROPS.indexOf(e.w)>=0?'#7cc27a':'#b9b0a3';
+   if(used.indexOf(e.x+','+e.y)>=0)c=NOUNS.indexOf(e.w)>=0?'#ff9ab5':PROPS.indexOf(e.w)>=0?'#a0f09a':'#fff';
+   rr(X+3,Y+3,S-6,S-6,6,c);
+   if(e.f){ctx.strokeStyle='#2a2622';ctx.lineWidth=2;ctx.strokeRect(X+6,Y+6,S-12,S-12)}
+   ctx.fillStyle='#2a2622';ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.fillText(e.w,X+S/2,Y+S/2+4)}
+  if(e.k==='bean'){
+   ctx.fillStyle='#d9a05b';ctx.beginPath();ctx.arc(X+S/2,Y+S/2+3,15,0,7);ctx.fill();
+   ctx.beginPath();ctx.moveTo(X+10,Y+16);ctx.lineTo(X+14,Y+8);ctx.lineTo(X+22,Y+14);ctx.fill();
+   ctx.beginPath();ctx.moveTo(X+38,Y+16);ctx.lineTo(X+34,Y+8);ctx.lineTo(X+26,Y+14);ctx.fill();
+   ctx.fillStyle='#2a2622';ctx.fillRect(X+17,Y+20,3,4);ctx.fillRect(X+28,Y+20,3,4);
+   ctx.fillRect(X+14,Y+30,4,3);ctx.fillRect(X+26,Y+33,4,3);
+   if(tail){ctx.strokeStyle='#d9a05b';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(X+S/2,Y+S-8);ctx.quadraticCurveTo(X+S/2+14,Y+S+2,X+S/2+18,Y+S-14);ctx.stroke()}
+  }
+ });
+ if(won){ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(0,0,W*S,H*S);ctx.fillStyle='#ffd86b';ctx.font='bold 28px monospace';ctx.textAlign='center';ctx.fillText('LAND IS OWN',W*S/2,H*S/2)}
+}
+function setTail(v){tail=v;var b=document.getElementById('bt');b.textContent='Tail: '+(v?'on':'off');b.className='b'+(v?' on':'');draw()}
+document.addEventListener('keydown',function(e){
+ var m={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+ if(m){e.preventDefault();move(m[0],m[1])}
+ else if(e.key==='t'||e.key==='T')setTail(!tail);
+ else if(e.key==='z'||e.key==='Z')undo();
+ else if(e.key==='r'||e.key==='R')reset();
+});
+document.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){var d=b.dataset.d.split(',');move(+d[0],+d[1])}});
+document.getElementById('bu').onclick=undo;
+document.getElementById('br').onclick=reset;
+document.getElementById('bt').onclick=function(){setTail(!tail)};
+// self-test
+(function(){
+ var ok=[];
+ var base=level().filter(function(e){return e.k==='word'});
+ ok.push(!has(parseRules(base).rules,'LAND','OWN'));
+ var s=base.filter(function(e){return !(e.w==='LEASE'&&e.x===4&&e.y===2)}).filter(function(e){return !(e.w==='OWN'&&e.x===8)});
+ s.push(wd('OWN',4,2));
+ ok.push(has(parseRules(s).rules,'LAND','OWN'));
+ var t=base.filter(function(e){return !(e.w==='OWN'&&e.x===8)});t.push(wd('OWN',3,3));
+ ok.push(!has(parseRules(t).rules,'LAND','OWN')&&has(parseRules(base).rules,'BEAN','YOU'));
+ // LAND IS LEASE + LAND IS OWN must fail
+ var u=base.filter(function(e){return !(e.w==='OWN'&&e.x===8)});u.push(wd('IS',3,3),wd('OWN',3,4),wd('LAND',3,2));
+ document.getElementById('test').textContent='self-test: '+(ok.every(Boolean)?'pass':'FAIL '+ok.join());
+})();
+reset();
+</script></body></html>

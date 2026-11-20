@@ -41,7 +41,6 @@ function level(){return [
  {k:'wall',x:5,y:5},{k:'wall',x:5,y:6},{k:'wall',x:9,y:5},{k:'wall',x:10,y:5},
  {k:'land',x:9,y:6},{k:'bean',x:4,y:1}
 ]}
-// pure: rules from list of words
 function parseRules(ws){
  var g={};ws.forEach(function(e){g[e.x+','+e.y]=e.w});
  var rules=[],used=[];
@@ -59,7 +58,6 @@ function parseRules(ws){
  });
  return {rules:rules,used:used};
 }
-// pure: does noun have prop
 function has(rules,noun,prop){
  var set=[noun],ch=true;
  while(ch){ch=false;rules.forEach(function(r){
@@ -149,7 +147,6 @@ document.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){v
 document.getElementById('bu').onclick=undo;
 document.getElementById('br').onclick=reset;
 document.getElementById('bt').onclick=function(){setTail(!tail)};
-// self-test
 (function(){
  var ok=[];
  var base=level().filter(function(e){return e.k==='word'});
@@ -159,17 +156,16 @@ document.getElementById('bt').onclick=function(){setTail(!tail)};
  ok.push(has(parseRules(s).rules,'LAND','OWN'));
  var t=base.filter(function(e){return !(e.w==='OWN'&&e.x===8)});t.push(wd('OWN',3,3));
  ok.push(!has(parseRules(t).rules,'LAND','OWN')&&has(parseRules(base).rules,'BEAN','YOU'));
- var u=base.filter(function(e){return !(e.w==='OWN'&&e.x===8)});u.push(wd('IS',3,3),wd('OWN',3,4),wd('LAND',3,2));
  document.getElementById('test').textContent='self-test: '+(ok.every(Boolean)?'pass':'FAIL '+ok.join());
 })();
 
 // ---- noise cards ----
 var NOISES=[['A block slides','SHHK'],['Bean bumps a wall','TOK'],['A rule locks in','CLUNK'],['The deed is signed','PAW-STAMP']];
-// pure: should this key event flip the card?
 function keyFlips(key,repeat){return (key==='Enter'||key===' '||key==='Spacebar')&&!repeat}
 // broken twin: counts held-key repeats
 function keyFlipsBad(key,repeat){return key==='Enter'||key===' '||key==='Spacebar'}
-function makeCard(front,back){
+function makeCard(front,back,rule){
+ rule=rule||keyFlips;
  var c=document.createElement('div');
  c.className='card';c.tabIndex=0;c.setAttribute('role','button');c.setAttribute('aria-pressed','false');
  c.dataset.flips='0';c.textContent=front;
@@ -182,15 +178,21 @@ function makeCard(front,back){
  c.addEventListener('click',flip);
  c.addEventListener('keydown',function(e){
   if(e.key==='Enter'||e.key===' '||e.key==='Spacebar')e.preventDefault();
-  if(keyFlips(e.key,e.repeat))flip();
+  if(rule(e.key,e.repeat))flip();
  });
  c.addEventListener('keyup',function(e){if(e.key===' '||e.key==='Spacebar')e.preventDefault()});
  return c;
 }
+// press a card like a held key: one real keydown, then repeats, then keyup
+function heldFlips(rule){
+ var c=makeCard('f','b',rule);document.body.appendChild(c);c.style.display='none';
+ function key(type,k,rep){c.dispatchEvent(new KeyboardEvent(type,{key:k,repeat:!!rep,bubbles:true,cancelable:true}))}
+ key('keydown',' ');key('keydown',' ',true);key('keydown',' ',true);key('keydown',' ',true);key('keyup',' ');
+ var n=+c.dataset.flips;c.remove();return n;
+}
 (function(){
  var box=document.getElementById('cards');
  NOISES.forEach(function(n){box.appendChild(makeCard(n[0],n[1]))});
- // tests on a spare card
  var res=[];
  var spare=makeCard('front','back');document.body.appendChild(spare);spare.style.display='none';
  function key(type,k,rep){spare.dispatchEvent(new KeyboardEvent(type,{key:k,repeat:!!rep,bubbles:true,cancelable:true}))}
@@ -207,10 +209,12 @@ function makeCard(front,back){
  res.push(flips()===3);
  res.push(spare.tabIndex===0&&spare.getAttribute('role')==='button');
  res.push(keyFlips('Enter',false)&&keyFlips(' ',false)&&!keyFlips('Enter',true)&&!keyFlips('x',false));
- var twinFails=keyFlipsBad('Enter',true)===true; // repeat must not flip, twin does
- res.push(twinFails&&keyFlips('Enter',true)===false);
  spare.remove();
- document.getElementById('test2').textContent='card test: '+(res.every(Boolean)?'pass':'FAIL '+res.join());
+ // held key: real card flips once, broken card must flip more
+ var good=heldFlips(keyFlips),bad=heldFlips(keyFlipsBad);
+ res.push(good===1);
+ res.push(bad!==1);
+ document.getElementById('test2').textContent='card test: '+(res.every(Boolean)?'pass':'FAIL '+res.join())+' (held key: real '+good+', broken '+bad+')';
 })();
 reset();
 </script></body></html>
